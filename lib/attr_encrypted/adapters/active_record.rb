@@ -49,7 +49,21 @@ if defined?(ActiveRecord::Base)
           # <tt>attr_encrypted</tt> method
           def attr_encrypted(*attrs)
             super
-            attrs.reject { |attr| attr.is_a?(Hash) }.each { |attr| alias_method "#{attr}_before_type_cast", attr }
+            attrs.reject { |attr| attr.is_a?(Hash) }.each do |attr|
+              alias_method "#{attr}_before_type_cast", attr
+              encrypted_attr = encrypted_attributes[attr.to_sym][:attribute]
+              class_eval <<-EOS
+              def #{attr}_was
+                #{encrypted_attr}_was.nil? ? nil : decrypt(:#{attr}, #{encrypted_attr}_was)
+              end
+              def #{attr}_change
+                [#{attr}_was, __send__(:#{attr})] if #{encrypted_attr}_changed?
+              end
+              def #{attr}_changed?
+                #{encrypted_attr}_changed?
+              end
+              EOS
+            end
           end
 
           def attribute_instance_methods_as_symbols
